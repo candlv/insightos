@@ -41,3 +41,27 @@ export async function ensureDefaultWorkspace(userId: string) {
     throw new Error('Failed to create a unique default workspace name after several attempts.');
   });
 }
+
+// --- Role-aware workspace context (auth + membership) ---
+import { requireAuth } from '@/lib/auth'; // add at top if not already imported
+
+export async function getWorkspaceContext(workspaceId: string): Promise<{
+  userId: string;
+  role: Role | null;
+}> {
+  const { user } = await requireAuth();
+
+  // Fast path: use memberships already attached to user
+  const cached = user.memberships?.find((m) => m.workspaceId === workspaceId);
+  if (cached) {
+    return { userId: user.id, role: cached.role };
+  }
+
+  // Fallback: query Prisma if needed (defensive)
+  const membership = await prisma.membership.findUnique({
+    where: { userId_workspaceId: { userId: user.id, workspaceId } },
+    select: { role: true },
+  });
+
+  return { userId: user.id, role: membership?.role ?? null };
+}

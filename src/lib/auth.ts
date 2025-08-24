@@ -1,12 +1,16 @@
 // src/lib/auth.ts
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
-import type { Session, User } from '@prisma/client';
+import type { Session, Role } from '@prisma/client';
 
 const SESSION_COOKIE = 'insightos.sid'; // keep consistent with your auth routes
 
 export type AuthContext = {
-  user: Pick<User, 'id' | 'email'>;
+  user: {
+    id: string;
+    email: string;
+    memberships: { workspaceId: string; role: Role }[];
+  };
   session: Pick<Session, 'id' | 'token' | 'expiresAt'>;
 };
 
@@ -18,8 +22,19 @@ export async function getAuth(): Promise<AuthContext | null> {
 
   const session = await prisma.session.findUnique({
     where: { token },
-    include: { user: { select: { id: true, email: true } } },
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          memberships: {
+            select: { workspaceId: true, role: true },
+          },
+        },
+      },
+    },
   });
+
   if (!session) return null;
 
   // Expired?
